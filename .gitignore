@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+test_login.py
+test_mcp.py
+uv.lock
+data/policy_index/chroma.sqlite3
+data/policy_index/157a3800-4717-466d-846b-d5be01aafba8/data_level0.bin
+data/policy_index/157a3800-4717-466d-846b-d5be01aafba8/header.bin
+data/policy_index/157a3800-4717-466d-846b-d5be01aafba8/length.bin
+data/policy_index/157a3800-4717-466d-846b-d5be01aafba8/link_lists.bin
