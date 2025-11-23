@@ -1,149 +1,231 @@
-# HR Assistant v2
+# HR AI Assistant System
 
-An authenticated HR copilot that lets employees chat about policies, check their leave balance, view past requests, and even apply for new leave directly inside Streamlit. Administrators can upload new policies, rebuild the retrieval index, and manage the document library.
+Conversational HR Support with RAG + MCP Leave Management + LangGraph Agent
 
+---
 
-## Architecture Overview
+## 📌 Overview
 
-- **Presentation** – `app.py` renders Streamlit pages for login, chat, policy upload, and library management.
-- **Guardrails** – `guardrails_local.py` runs pre/post validation for every message, blocking toxic or injected input and sanitizing replies.
-- **Orchestration** – `agent.py` (LangGraph) classifies intent via GPT‑4o mini and routes to policy RAG, leave lookups, or the conversational leave-apply workflow.
-- **Knowledge** – `rag.py` ingests policies (PDF/TXT/MD/HTML), builds Chroma embeddings with OpenAI, and serves grounded answers.
-- **System of record** – `mcp_client.py` talks to the FastMCP HR backend for login, leave balance, history, and submit actions.
+The HR AI Assistant is a conversational system that enables employees to interact with HR policy information and leave management workflows through natural language.
 
+It integrates RAG-based document search, MCP API tools, LangGraph orchestration, and Streamlit UI with role-based access (Employee / Admin).
 
-## Sequence Diagram
+- Employees can ask questions about HR policies, view policy library, apply for leave, and check leave balances.
+- HR Admins can upload policy documents, manage versions, delete files, rebuild embeddings, and view summaries & diffs.
 
-```mermaid
+---
+
+## 🚀 Key Features
+
+| Capability                  | Description                                                                |
+|-----------------------------|----------------------------------------------------------------------------|
+| Conversational AI Assistant | Natural language HR support powered by LLM + LangGraph                    |
+| RAG Policy Search           | Semantic search over uploaded HR policy docs via Chroma                   |
+| Policy Upload & Versioning  | Admin manages PDF, TXT, MD, HTML files with auto summary & diff           |
+| MCP Leave Management        | Apply leave, check balance, credit leave, list history                    |
+| Guardrails Safety           | Filters abusive/toxic language & responds safely                          |
+| Role-Based UI               | Employee vs Admin views dynamically rendered                              |
+| LangSmith Tracing           | Monitoring agent reasoning & traces                                       |
+| No Chat Persistence         | Clean session resets per conversation                                     |
+
+---
+
+## 🏗 System Architecture
+
+flowchart TD
+
+subgraph UI["🖥 Streamlit UI"]
+Login
+ChatAssistant
+UploadPolicies
+PolicyLibrary
+end
+
+subgraph Guard["🛡 Guardrails"]
+InputFilter
+OutputValidation
+end
+
+subgraph Agent["🧠 LangGraph Agent"]
+IntentClassifier
+WorkflowRouter
+end
+
+subgraph RAG["📚 RAG Engine"]
+Chunker
+Embeddings
+ChromaDB
+end
+
+subgraph MCP["🔧 MCP Leave API"]
+login
+get_leave_balance
+apply_leave
+credit_leave
+list_request
+end
+
+subgraph LLM["🤖 OpenAI GPT-4o"]
+end
+
+UI --> Guard --> Agent --> RAG --> LLM --> Agent --> Guard --> UI
+Agent --> MCP --> UI
+UI --> RAG
+
+text
+
+---
+
+## 📂 Project Modules
+
+/app
+app.py # Streamlit UI
+agent.py # LangGraph workflow logic
+rag_engine.py # Embedding + Vector DB operations
+guardrails.py # Toxic input/output filtering
+policy_manager.py # Upload, delete, version, diff, summaries
+mcp_client.py # LangChain-MCP adapter client implementation
+
+text
+
+MCP Leave API service is deployed externally via FastAPI + FastMCP.
+
+---
+
+## ⚙ MCP Tools Available
+
+| Tool                         | Description                        |
+|------------------------------|------------------------------------|
+| login                        | Authenticate employee/admin        |
+| get_leave_balance            | Balance per leave bucket           |
+| apply_leave                  | Submit a leave request             |
+| credit_leave                 | HR credit leave                    |
+| list_employee_leave_requests | History of leave                   |
+| initialize_employee_balance  | Default leave creation             |
+
+---
+
+## 👥 User Roles
+
+| Role       | Capabilities                                                            |
+|------------|------------------------------------------------------------------------|
+| Employee   | Ask questions, search policies, apply leave, check balance             |
+| Admin / HR | Manage policies (upload/delete/version), indexing, diff viewer         |
+
+---
+
+## 💬 Sample Conversations
+
+**✔ Policy Q&A**  
+User: What is the maternity leave policy?  
+Assistant: According to HR Policy (section 2.3), maternity leave allows...
+
+**✔ Leave Action**  
+User: Apply 3 days sick leave starting Monday  
+Assistant: You currently have 6 days sick leave. Confirm application?
+
+**❌ Guardrails Example**  
+User: you are stupid  
+Assistant: Your message violates company policy.  
+Sanitized: you are ~~stupid~~
+
+---
+
+## 🎞 Sequence Diagrams
+
+**Policy Retrieval**
+
 sequenceDiagram
-    autonumber
-    participant User
-    participant UI as Streamlit UI (app.py)
-    participant InGuard as Input Guardrails
-    participant Agent as LangGraph Agent
-    participant RAG as RAG/Chroma
-    participant MCP as FastMCP HR MCP
-    participant OutGuard as Output Guardrails
+User->>UI: Question about HR policy
+UI->>Guard: Validate input
+Guard->>Agent: Forward cleaned input
+Agent->>RAG: Retrieve similar chunks
+RAG->>LLM: Provide context
+LLM->>Agent: Answer
+Agent->>UI: Response
 
-    User->>UI: Login / chat input
-    UI->>MCP: mcp_login(username, password)
-    MCP-->>UI: token, roles
-    loop Each chat turn
-        User->>UI: Message
-        UI->>InGuard: validate_input(message)
-        InGuard-->>UI: sanitized / blocked text
-        alt Allowed message
-            UI->>Agent: invoke(messages, token)
-            Agent->>Agent: classify_intent
-            alt Policy question
-                Agent->>RAG: search + answer_policy_question
-                RAG-->>Agent: grounded answer + sources
-            else Leave balance/status/apply
-                Agent->>MCP: call leave tool (token, payload)
-                MCP-->>Agent: leave data / confirmation
-            end
-            Agent-->>UI: assistant reply
-        else Blocked message
-            InGuard-->>UI: policy violation notice
-        end
-        UI->>OutGuard: validate_output(response)
-        OutGuard-->>UI: cleaned response
-        UI-->>User: Render chat update
-    end
-```
+text
 
+**Apply Leave Workflow**
 
-## High-Level Design
+sequenceDiagram
+User->>UI: "Apply 3 days PL leave"
+UI->>Guard: Validate
+Guard->>Agent: Forward
+Agent->>MCP: get_leave_balance
+MCP->>Agent: balance
+Agent->>User: Confirm?
+User->>Agent: Yes
+Agent->>MCP: apply_leave
+MCP->>Agent: Result
+Agent->>UI: Confirmation
 
-| Layer | Responsibilities | Key Files / Services |
-| --- | --- | --- |
-| Presentation | Streamlit pages, login form, role-aware tabs, session state, download/delete actions | `app.py` |
-| Guardrails | Input filtering (toxicity, injection, size), output cleanup | `guardrails_local.py` |
-| Orchestration | Intent classification, policy RAG handler, leave balance/status/apply handlers | `agent.py`, LangGraph, `langchain_openai` |
-| Knowledge Store | Policy loaders, text splitting, embedding build/rebuild, Chroma persistence | `rag.py`, `data/policies`, `data/policy_index` |
-| External APIs | FastMCP authentication + leave tools, OpenAI models/embeddings | `mcp_client.py`, OpenAI API |
-| Configuration & Secrets | Directory paths, `.env` loading, MCP endpoint config | `config.py`, `.env` |
+text
 
+---
 
-## Repository layout
+## 🚧 Roadmap (Next Phases)
 
-```
-├── app.py                  # Streamlit entry point
-├── agent.py                # LangGraph agent + intent handlers
-├── guardrails_local.py     # Chat guardrails
-├── rag.py                  # Policy ingestion + retrieval helpers
-├── mcp_client.py           # FastMCP integration
-├── config.py               # Directory/env configuration
-├── data/
-│   ├── policies/           # Drop uploaded HR docs here
-│   └── policy_index/       # Chroma vector store (auto-generated)
-├── pyproject.toml          # Project metadata + dependencies
-├── uv.lock                 # Locked dependency graph
-└── test_*.py               # Example tests for MCP flows
-```
+- Leave approval workflow
+- Persistent chat history & CRM logging
+- Email & Teams notifications
+- Analytics dashboard for HR
+- Optional cloud migration (Azure / AWS)
 
+---
 
-## Prerequisites
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) (package/dependency manager)
-- OpenAI API key (set `OPENAI_API_KEY` in `.env`)
-- Access to the FastMCP HR backend (default URL: `https://employee.fastmcp.app/mcp`)
+## 🧪 Tech Stack
 
+| Layer         | Technology                         |
+|---------------|------------------------------------|
+| UI            | Streamlit                          |
+| Orchestration | LangGraph                          |
+| RAG           | Chroma + OpenAI embeddings         |
+| Leave Backend | FastAPI + SQLite + FastMCP         |
+| LLM           | OpenAI GPT-4o / GPT-4o-mini        |
+| Monitoring    | LangSmith                          |
+| Safety Filter | Custom Guardrails                  |
 
-## Setup (uv)
+---
 
-1. **Clone and enter the repo**
-   ```bash
-   git clone <repo-url> hr_assistant_v2
-   cd hr_assistant_v2
-   ```
-2. **Install dependencies with uv**  
-   (This reads `pyproject.toml` + `uv.lock` and creates a virtual env automatically.)
-   ```bash
-   uv sync
-   ```
-3. **Configure environment variables**  
-   Create a `.env` file in the project root (auto-loaded via `python-dotenv`):
-   ```bash
-   OPENAI_API_KEY=sk-...
-   POLICY_DIR=data/policies
-   POLICY_INDEX_DIR=data/policy_index
-   ```
-4. **(Optional) Add new dependencies**  
-   ```bash
-   uv add <package-name>
-   ```
-   After adding, re-run `uv sync` on other machines to reproduce the lock file.
+## 📦 Deployment
 
+**Local UI**  
+uv run streamlit run app.py
 
-## Running the assistant
+text
 
-1. **Start Streamlit**
-   ```bash
-   uv run streamlit run app.py
-   ```
-2. **Log in** using the credentials provisioned on the FastMCP server. Successful login stores the MCP token in Streamlit session state.
-3. **Upload or update policies** from the “Upload Policies” tab (admins only). Supported formats: PDF, TXT, MD, HTML.
-4. **Rebuild the vector index** either immediately after uploading (button in the UI) or manually:
-   ```bash
-   uv run python -c "from rag import build_or_rebuild_vector_store; build_or_rebuild_vector_store()"
-   ```
-5. **Chat with the assistant**  
-   - Policy Q&A uses RAG grounded answers with citations.  
-   - Leave balance/status/submit intents call MCP tools using the authenticated token.  
-   - Guardrails block unsafe input and scrub output before it is rendered.
+**MCP Server Execution**  
+python main.py mcp
 
+text
 
-## Testing
+---
 
-Run any available tests (e.g., MCP login mocks) with:
-```bash
-uv run pytest
-```
+## ✨ Current Status
 
+| Component            | Status                                 |
+|----------------------|----------------------------------------|
+| MCP Server           | ✔ deployed & stable                    |
+| Streamlit UI         | ✔ working with admin/employee roles    |
+| Policy Upload & RAG  | ✔ completed                            |
+| Leave workflow       | ✔ working                              |
+| Guardrails           | ✔ enabled                              |
+| LangGraph agent flow | ✔ complete                             |
+| Chat history         | ✖ intentionally disabled for now       |
 
-## Operational notes
-- The Chroma DB lives under `data/policy_index`; deleting it forces a clean rebuild.
-- MCP endpoints are configured in `mcp_client.py`. Update `MCP_SERVER_URL` if your FastMCP deployment lives elsewhere.
-- Streamlit session state contains the login token; logging out clears all cached chat history.
-- Both embeddings and chat completions use OpenAI models (`text-embedding-3-small`, `gpt-4o-mini`). Ensure the API key has access to these models or adjust the model names in `rag.py` and `agent.py`.
+---
+
+## 🤝 Contributions
+
+PRs, improvements and features welcome.
+
+---
+
+## 📄 License
+
+Internal / Private — Not for public distribution
+
+---
+
+## 🏁 End of README
