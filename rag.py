@@ -12,12 +12,23 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from langsmith import traceable
+from chromadb.config import Settings
+from chromadb.utils import embedding_functions
 
 from config import POLICY_DIR, POLICY_INDEX_DIR
 
 
 # Name of the Chroma collection used for HR policies
 COLLECTION_NAME = "hr_policies"
+
+
+def _chroma_settings() -> Settings:
+    """
+    Shared Chroma client settings ensuring read/write access.
+    """
+    return Settings(
+        allow_reset=True,
+    )
 
 
 def _load_policy_documents() -> List[Document]:
@@ -95,6 +106,7 @@ def build_or_rebuild_vector_store() -> Chroma:
         embedding=embeddings,
         persist_directory=str(POLICY_INDEX_DIR),
         collection_name=COLLECTION_NAME,
+        client_settings=_chroma_settings(),
     )
     vectordb.persist()
     return vectordb
@@ -111,6 +123,7 @@ def get_vector_store() -> Chroma:
         embedding_function=embeddings,
         persist_directory=str(POLICY_INDEX_DIR),
         collection_name=COLLECTION_NAME,
+        client_settings=_chroma_settings(),
     )
 
 

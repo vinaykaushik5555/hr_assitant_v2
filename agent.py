@@ -4,6 +4,7 @@ import json
 from datetime import date as dt_date
 from typing import Dict, List, Literal, TypedDict
 
+import logging
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 from langsmith import traceable
@@ -13,8 +14,14 @@ from rag import answer_policy_question
 from mcp_client import (
     mcp_get_leave_balance,
     mcp_list_my_leave_requests,
-    mcp_apply_leave,   # <-- make sure this is defined in mcp_client
+    mcp_apply_leave,
+    mcp_who_am_i,
+    mcp_admin_list_employees,
+    mcp_admin_create_employee,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------
@@ -29,11 +36,13 @@ class AgentState(TypedDict):
     messages: full conversation as a list of {"role": "user"|"assistant", "content": str}
     intent:   last classified intent label
     token:    auth token for MCP calls (per logged-in user)
+    is_admin: whether the logged-in user has HR admin privileges
     """
 
     messages: List[Dict[str, str]]
     intent: str
     token: str
+    is_admin: bool
 
 
 # ---------------------------------------------------------------------
@@ -61,11 +70,14 @@ def classify_intent(state: AgentState) -> AgentState:
     Use an LLM to classify the user's intent.
 
     Possible intents:
-      - 'policy_query'   -> ask about HR policies
-      - 'leave_balance'  -> ask about current leave balance
-      - 'leave_status'   -> ask about status/history of leave applications
-      - 'leave_apply'    -> wants to apply for leave via conversation
-      - 'other'          -> anything else / small talk
+      - 'policy_query'        -> ask about HR policies
+      - 'leave_balance'       -> ask about current leave balance
+      - 'leave_status'        -> ask about status/history of leave applications
+      - 'leave_apply'         -> wants to apply for leave via conversation
+      - 'profile_info'        -> wants to know details about themselves / their role
+      - 'admin_list_employees'-> HR admin wants roster/directory data
+      - 'admin_create_employee'-> HR admin wants to onboard/create an employee
+      - 'other'               -> anything else / small talk
     """
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
@@ -78,9 +90,17 @@ def classify_intent(state: AgentState) -> AgentState:
         "  - leave_balance\n"
         "  - leave_status\n"
         "  - leave_apply\n"
+        "  - profile_info\n"
+        "  - admin_list_employees\n"
+        "  - admin_create_employee\n"
         "  - other\n\n"
         "If the user is clearly talking about applying for leave, dates, "
-        "or asking to submit leave, choose 'leave_apply'.\n\n"
+        "or asking to submit leave, choose 'leave_apply'.\n"
+        "If the user wants to know their own profile/role/token information, "
+        "choose 'profile_info'.\n"
+        "If the user wants to list or review employees, choose 'admin_list_employees'.\n"
+        "If the user wants to onboard or create an employee account, choose "
+        "'admin_create_employee'.\n\n"
         "Return ONLY the intent label, nothing else."
     )
 
@@ -97,11 +117,15 @@ def classify_intent(state: AgentState) -> AgentState:
         "leave_balance",
         "leave_status",
         "leave_apply",
+        "profile_info",
+        "admin_list_employees",
+        "admin_create_employee",
         "other",
     }:
         intent = "other"
 
     state["intent"] = intent
+    logger.info("Classified intent as '%s' for message '%s'", intent, last_user)
     return state
 
 
@@ -149,11 +173,14 @@ def handle_leave_balance(state: AgentState) -> AgentState:
     res = mcp_get_leave_balance(token)
 
     if not res.get("success"):
-        content = f"Failed to fetch your leave balance: {res.get('error_message', 'unknown error')}."
+        err = res.get("error_message", "unknown error")
+        logger.warning("Leave balance fetch failed: %s", err)
+        content = f"Failed to fetch your leave balance: {err}."
     else:
         balances = res["data"]["balances"]
         parts = [f"{lt}: {days}" for lt, days in balances.items()]
         content = "Your current leave balance is:\n\n- " + "\n- ".join(parts)
+        logger.info("Leave balance retrieved successfully.")
 
     state["messages"].append({"role": "assistant", "content": content})
     return state
@@ -172,7 +199,9 @@ def handle_leave_status(state: AgentState) -> AgentState:
     res = mcp_list_my_leave_requests(token)
 
     if not res.get("success"):
-        content = f"Failed to fetch your leave requests: {res.get('error_message', 'unknown error')}."
+        err = res.get("error_message", "unknown error")
+        logger.warning("Leave status fetch failed: %s", err)
+        content = f"Failed to fetch your leave requests: {err}."
         state["messages"].append({"role": "assistant", "content": content})
         return state
 
@@ -180,6 +209,7 @@ def handle_leave_status(state: AgentState) -> AgentState:
     requests = data.get("requests", [])
     if not requests:
         content = "You don't have any leave applications on record."
+        logger.info("User has no leave requests on record.")
         state["messages"].append({"role": "assistant", "content": content})
         return state
 
@@ -193,6 +223,7 @@ def handle_leave_status(state: AgentState) -> AgentState:
 
     content = "Here are your recent leave applications:\n\n" + "\n".join(lines)
     state["messages"].append({"role": "assistant", "content": content})
+    logger.info("Leave status summary prepared with %d records.", len(lines))
     return state
 
 
@@ -220,9 +251,19 @@ def _extract_leave_struct(state: AgentState) -> Dict[str, str | None]:
         conv_lines.append(f"{m['role']}: {m['content']}")
     conv_text = "\n".join(conv_lines)
 
+    today = dt_date.today().isoformat()
+
     system_prompt = (
         "You are a parser that extracts structured leave application data "
         "from the conversation.\n\n"
+        f"Today's date is {today}. Whenever the user mentions relative dates "
+        "like 'today', 'tomorrow', 'next Monday', or 'day after tomorrow', "
+        "convert them into absolute YYYY-MM-DD values referenced from today's "
+        "date. If the user supplies natural language calendar dates such as "
+        "'25th of Dec', 'December 25', or 'next Thursday in April', convert "
+        "them as well. When a month/day is given without a year, assume the "
+        "next occurrence of that date (use the current year if it hasn't "
+        "passed yet, otherwise use the next year).\n\n"
         "You MUST respond with a SINGLE JSON object only, no explanation.\n"
         "JSON keys:\n"
         "  - leave_type: one of ['CL', 'PL', 'ML', 'OTHER'] or null\n"
@@ -264,6 +305,74 @@ def _extract_leave_struct(state: AgentState) -> Dict[str, str | None]:
         "start_date": data.get("start_date"),
         "end_date": data.get("end_date"),
         "reason": data.get("reason"),
+    }
+
+
+def _extract_employee_struct(state: AgentState) -> Dict[str, str | None]:
+    """
+    Use an LLM to extract employee onboarding data from conversation.
+
+    Expected keys:
+      - employee_id
+      - username
+      - password
+      - name
+      - email
+      - department (optional)
+    """
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    conv_lines = []
+    for m in state["messages"][-10:]:
+        conv_lines.append(f"{m['role']}: {m['content']}")
+    conv_text = "\n".join(conv_lines)
+
+    system_prompt = (
+        "You extract structured employee onboarding fields from the conversation.\n"
+        "Respond with a SINGLE JSON object only.\n"
+        "JSON keys:\n"
+        "  - employee_id (string or null)\n"
+        "  - username (string or null)\n"
+        "  - password (string or null)\n"
+        "  - name (string or null)\n"
+        "  - email (string or null)\n"
+        "  - department (string or null)\n"
+        "If a field is unknown, set it to null."
+    )
+
+    user_prompt = (
+        "Extract employee onboarding fields from this conversation:\n\n"
+        f"{conv_text}\n\n"
+        "Return ONLY the JSON object."
+    )
+
+    resp = llm.invoke(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+    )
+
+    raw = str(resp.content)
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return {
+            "employee_id": None,
+            "username": None,
+            "password": None,
+            "name": None,
+            "email": None,
+            "department": None,
+        }
+
+    return {
+        "employee_id": data.get("employee_id"),
+        "username": data.get("username"),
+        "password": data.get("password"),
+        "name": data.get("name"),
+        "email": data.get("email"),
+        "department": data.get("department"),
     }
 
 
@@ -326,6 +435,7 @@ def handle_leave_apply(state: AgentState) -> AgentState:
             "'Casual leave from 2025-12-10 to 2025-12-12 for a family function')."
         )
         state["messages"].append({"role": "assistant", "content": content})
+        logger.info("Awaiting additional leave info: %s", missing_str)
         return state
 
     # At this point we have leave_type, start_date, end_date, reason
@@ -337,6 +447,7 @@ def handle_leave_apply(state: AgentState) -> AgentState:
             "Please check the dates and try again."
         )
         state["messages"].append({"role": "assistant", "content": content})
+        logger.warning("Invalid leave dates provided: start=%s end=%s", start_date, end_date)
         return state
 
     # Call MCP to apply leave
@@ -354,6 +465,7 @@ def handle_leave_apply(state: AgentState) -> AgentState:
             f"Error: {res.get('error_message', 'unknown error')}"
         )
         state["messages"].append({"role": "assistant", "content": content})
+        logger.error("MCP apply_leave failed: %s", res.get("error_message", "unknown error"))
         return state
 
     # Build success confirmation
@@ -372,6 +484,196 @@ def handle_leave_apply(state: AgentState) -> AgentState:
     )
 
     state["messages"].append({"role": "assistant", "content": content})
+    logger.info(
+        "Leave application submitted: type=%s days=%d status=%s",
+        leave_type,
+        days,
+        status,
+    )
+    return state
+
+
+def handle_profile_info(state: AgentState) -> AgentState:
+    """
+    Call MCP who_am_i to display the user's profile details.
+    """
+    token = state["token"]
+    res = mcp_who_am_i(token)
+
+    if not res.get("success"):
+        err = res.get("error_message", "unknown error")
+        logger.warning("who_am_i failed: %s", err)
+        content = f"Couldn't load your profile: {err}."
+        state["messages"].append({"role": "assistant", "content": content})
+        return state
+
+    data = res.get("data")
+    profile: Dict[str, str] = {}
+    if isinstance(data, dict):
+        profile = data.get("employee") or data.get("profile") or data
+    elif isinstance(res, dict):
+        # Some servers wrap the data in the top-level response instead of `data`
+        profile = res.get("employee") or res.get("profile") or res
+
+    if not isinstance(profile, dict):
+        profile = {}
+
+    name = profile.get("name") or profile.get("full_name") or "Unknown user"
+    email = profile.get("email") or "Not provided"
+    dept = profile.get("department") or profile.get("dept") or "Not provided"
+    emp_id = (
+        profile.get("id")
+        or profile.get("employee_id")
+        or profile.get("emp_id")
+        or "Not provided"
+    )
+    role = "HR Admin" if profile.get("is_admin") else "Employee"
+
+    content = (
+        "Here's what I know about you:\n\n"
+        f"- Name: {name}\n"
+        f"- Employee ID: {emp_id}\n"
+        f"- Role: {role}\n"
+        f"- Email: {email}\n"
+        f"- Department: {dept}"
+    )
+    state["messages"].append({"role": "assistant", "content": content})
+    logger.info("Profile info shared with user (%s).", role)
+    return state
+
+
+def handle_admin_list_employees(state: AgentState) -> AgentState:
+    """
+    Allow admins to view a snapshot of the employee directory.
+    """
+    if not state.get("is_admin"):
+        content = "Only HR admins can access the employee directory."
+        logger.warning("Non-admin user attempted to access employee list.")
+        state["messages"].append({"role": "assistant", "content": content})
+        return state
+
+    token = state["token"]
+    res = mcp_admin_list_employees(token)
+
+    if not res.get("success"):
+        err = res.get("error_message", "unknown error")
+        logger.warning("admin_list_employees failed: %s", err)
+        content = f"Failed to fetch employees: {err}."
+        state["messages"].append({"role": "assistant", "content": content})
+        return state
+
+    data = res.get("data")
+    if isinstance(data, dict):
+        employees = data.get("employees") or data.get("items") or []
+    elif isinstance(data, list):
+        employees = data
+    else:
+        employees = []
+
+    if not employees:
+        content = "The directory is empty or unavailable."
+        logger.info("Employee directory returned no records.")
+        state["messages"].append({"role": "assistant", "content": content})
+        return state
+
+    lines = []
+    for emp in employees[:5]:
+        if not isinstance(emp, dict):
+            continue
+        emp_name = emp.get("name") or emp.get("username") or "Unknown"
+        emp_id = emp.get("id") or emp.get("employee_id") or "N/A"
+        email = emp.get("email") or "No email"
+        dept = emp.get("department") or "General"
+        admin_flag = " (admin)" if emp.get("is_admin") else ""
+        lines.append(f"- {emp_name}{admin_flag} — ID: {emp_id} — {dept} — {email}")
+
+    content = "Here are the latest employees:\n\n" + "\n".join(lines)
+    if len(employees) > 5:
+        content += f"\n\n...and {len(employees) - 5} more."
+
+    state["messages"].append({"role": "assistant", "content": content})
+    logger.info("Provided employee snapshot with %d entries.", len(lines))
+    return state
+
+
+def handle_admin_create_employee(state: AgentState) -> AgentState:
+    """
+    Conversational onboarding for creating a new employee (admin only).
+    """
+    if not state.get("is_admin"):
+        content = "You need HR admin permissions to create new employees."
+        logger.warning("Non-admin attempted to create employee.")
+        state["messages"].append({"role": "assistant", "content": content})
+        return state
+
+    token = state["token"]
+    struct = _extract_employee_struct(state)
+
+    employee_id = (struct.get("employee_id") or "").strip() or None
+    username = (struct.get("username") or "").strip() or None
+    password = struct.get("password") or None
+    name = (struct.get("name") or "").strip() or None
+    email = (struct.get("email") or "").strip() or None
+    department = (struct.get("department") or "").strip() if struct.get("department") else ""
+
+    missing = []
+    if not employee_id:
+        missing.append("employee ID")
+    if not username:
+        missing.append("username")
+    if not password:
+        missing.append("temporary password")
+    if not name:
+        missing.append("full name")
+    if not email:
+        missing.append("email address")
+
+    if missing:
+        missing_str = ", ".join(missing)
+        content = (
+            "To create the employee I still need the following details: "
+            f"{missing_str}. Please provide them (you can share everything in one message)."
+        )
+        state["messages"].append({"role": "assistant", "content": content})
+        logger.info("Awaiting missing employee fields: %s", missing_str)
+        return state
+
+    res = mcp_admin_create_employee(
+        token,
+        employee_id,
+        username,
+        password,
+        name,
+        email,
+        department or "",
+    )
+
+    if not res.get("success"):
+        err = res.get("error_message", "unknown error")
+        logger.error("Employee creation via MCP failed: %s", err)
+        content = f"I couldn't create the employee: {err}."
+        state["messages"].append({"role": "assistant", "content": content})
+        return state
+
+    data = res.get("data")
+    if isinstance(data, dict):
+        created = data.get("employee") or data
+    else:
+        created = {}
+
+    emp_id = created.get("id") or employee_id
+    dept = created.get("department") or department or "General"
+    content = (
+        "Employee created successfully:\n\n"
+        f"- ID: {emp_id}\n"
+        f"- Username: {username}\n"
+        f"- Name: {name}\n"
+        f"- Email: {email}\n"
+        f"- Department: {dept}\n"
+        "They can now log in with the provided temporary password."
+    )
+    state["messages"].append({"role": "assistant", "content": content})
+    logger.info("Employee %s/%s created via agent.", emp_id, username)
     return state
 
 
@@ -389,7 +691,9 @@ def handle_other(state: AgentState) -> AgentState:
         "- Questions about HR policies (leave, holidays, etc.)\n"
         "- Checking your leave balance\n"
         "- Viewing your recent leave applications\n"
-        "- Applying for leave conversationally\n\n"
+        "- Applying for leave conversationally\n"
+        "- Showing your profile details\n"
+        "- HR admin tasks like viewing or onboarding employees\n\n"
         "Please ask a policy-related question or something about your leave."
     )
     state["messages"].append({"role": "assistant", "content": content})
@@ -406,6 +710,9 @@ def route_after_classify(state: AgentState) -> Literal[
     "handle_leave_balance",
     "handle_leave_status",
     "handle_leave_apply",
+    "handle_profile_info",
+    "handle_admin_list_employees",
+    "handle_admin_create_employee",
     "handle_other",
 ]:
     """
@@ -420,6 +727,12 @@ def route_after_classify(state: AgentState) -> Literal[
         return "handle_leave_status"
     if intent == "leave_apply":
         return "handle_leave_apply"
+    if intent == "profile_info":
+        return "handle_profile_info"
+    if intent == "admin_list_employees":
+        return "handle_admin_list_employees"
+    if intent == "admin_create_employee":
+        return "handle_admin_create_employee"
     return "handle_other"
 
 
@@ -434,6 +747,9 @@ graph.add_node("handle_policy_query", handle_policy_query)
 graph.add_node("handle_leave_balance", handle_leave_balance)
 graph.add_node("handle_leave_status", handle_leave_status)
 graph.add_node("handle_leave_apply", handle_leave_apply)
+graph.add_node("handle_profile_info", handle_profile_info)
+graph.add_node("handle_admin_list_employees", handle_admin_list_employees)
+graph.add_node("handle_admin_create_employee", handle_admin_create_employee)
 graph.add_node("handle_other", handle_other)
 
 # Entry point: classify intent first
@@ -448,6 +764,9 @@ for node_name in [
     "handle_leave_balance",
     "handle_leave_status",
     "handle_leave_apply",
+    "handle_profile_info",
+    "handle_admin_list_employees",
+    "handle_admin_create_employee",
     "handle_other",
 ]:
     graph.add_edge(node_name, END)

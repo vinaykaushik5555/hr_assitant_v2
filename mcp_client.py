@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, AsyncIterator
 
+import logging
+
 import anyio
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
@@ -88,8 +90,10 @@ async def _a_call_tool(tool_name: str, **kwargs) -> Dict[str, Any]:
     async with tool_session() as tools:
         tool = tools.get(tool_name)
         if tool is None:
+            logger.error("Tool '%s' not found in MCP session.", tool_name)
             return {"success": False, "error_message": f"Tool '{tool_name}' not found."}
 
+        logger.info("Invoking MCP tool '%s' with args %s", tool_name, kwargs)
         raw = await tool.ainvoke(kwargs)
         return parse_response(raw)
 
@@ -101,13 +105,16 @@ async def _a_mcp_login(username: str, password: str) -> LoginResult:
     res = await _a_call_tool("login", username=username, password=password)
 
     if not res.get("success"):
+        logger.warning("MCP login failed for '%s'", username)
         return LoginResult(
             success=False,
             error_message=res.get("error_message", "Login failed"),
             raw=res,
         )
 
-    data = res.get("data", {})
+    data = res.get("data")
+    if not isinstance(data, dict):
+        data = res if isinstance(res, dict) else {}
     return LoginResult(
         success=True,
         token=data.get("token"),
@@ -117,8 +124,16 @@ async def _a_mcp_login(username: str, password: str) -> LoginResult:
     )
 
 
+async def _a_mcp_logout(token: str) -> Dict[str, Any]:
+    return await _a_call_tool("logout", token=token)
+
+
+async def _a_mcp_who_am_i(token: str) -> Dict[str, Any]:
+    return await _a_call_tool("who_am_i", token=token)
+
+
 async def _a_mcp_get_leave_balance(token: str) -> Dict[str, Any]:
-    return await _a_call_tool("get_my_leave_balance", token=token)
+    return await _a_call_tool("get_leave_balance", token=token)
 
 
 async def _a_mcp_list_my_leave_requests(token: str) -> Dict[str, Any]:
@@ -133,12 +148,37 @@ async def _a_mcp_apply_leave(
     reason: str,
 ) -> Dict[str, Any]:
     return await _a_call_tool(
-        "apply_leave_for_me",
+        "apply_leave",
         token=token,
         leave_type=leave_type,
         days=days,
         start_date=start_date,
         reason=reason,
+    )
+
+
+async def _a_mcp_admin_list_employees(token: str) -> Dict[str, Any]:
+    return await _a_call_tool("admin_list_employees", token=token)
+
+
+async def _a_mcp_admin_create_employee(
+    token: str,
+    employee_id: str,
+    username: str,
+    password: str,
+    name: str,
+    email: str,
+    department: str = "",
+) -> Dict[str, Any]:
+    return await _a_call_tool(
+        "admin_create_employee",
+        token=token,
+        id=employee_id,
+        username=username,
+        password=password,
+        name=name,
+        email=email,
+        department=department,
     )
 
 
@@ -151,6 +191,20 @@ def mcp_login(username: str, password: str) -> LoginResult:
     Synchronous wrapper around async MCP login.
     """
     return anyio.run(_a_mcp_login, username, password)
+
+
+def mcp_logout(token: str) -> Dict[str, Any]:
+    """
+    Synchronous wrapper to invalidate the current session token.
+    """
+    return anyio.run(_a_mcp_logout, token)
+
+
+def mcp_who_am_i(token: str) -> Dict[str, Any]:
+    """
+    Synchronous wrapper to fetch current user profile information.
+    """
+    return anyio.run(_a_mcp_who_am_i, token)
 
 
 def mcp_get_leave_balance(token: str) -> Dict[str, Any]:
@@ -185,4 +239,36 @@ def mcp_apply_leave(
         start_date,
         reason,
     )
+
+
+def mcp_admin_list_employees(token: str) -> Dict[str, Any]:
+    """
+    Synchronous wrapper to list all employees (admin only).
+    """
+    return anyio.run(_a_mcp_admin_list_employees, token)
+
+
+def mcp_admin_create_employee(
+    token: str,
+    employee_id: str,
+    username: str,
+    password: str,
+    name: str,
+    email: str,
+    department: str = "",
+) -> Dict[str, Any]:
+    """
+    Synchronous wrapper to create a new employee (admin only).
+    """
+    return anyio.run(
+        _a_mcp_admin_create_employee,
+        token,
+        employee_id,
+        username,
+        password,
+        name,
+        email,
+        department,
+    )
 # =====================================================================
+logger = logging.getLogger(__name__)

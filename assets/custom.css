@@ -1,0 +1,225 @@
+/* ========== GLOBAL / LAYOUT (LIGHT THEME) ========== */
+
+/* ===== Remove empty white header band ===== */
+[data-testid="stHeader"] {
+    background-color: transparent;  /* no extra bar color */
+}
+
+/* collapse header height */
+[data-testid="stHeader"] > div {
+    height: 0px;
+    padding: 0;
+}
+
+/* optional: hide toolbar (Deploy, etc.) completely */
+[data-testid="stToolbar"] {
+    display: none;
+}
+
+/* tighten main content top padding */
+.block-container {
+    max-width: 960px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 0.5rem !important;
+    padding-bottom: 2.5rem;
+}
+
+.stApp {
+    background-color: #f3f4f6;               /* light gray background */
+    color: #0f172a;                          /* dark text */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont,
+        "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+/* Center main content and limit width similar to ChatGPT */
+.block-container {
+    max-width: 960px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 1.25rem;
+    padding-bottom: 2.5rem;
+}
+
+/* Headings a bit darker / clearer */
+h1, h2, h3, h4, h5, h6 {
+    color: #0f172a;
+}
+
+/* ========== LOGIN CARD ========== */
+
+.full-height-center {
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-card {
+    background: #ffffff;
+    padding: 2.5rem 2.75rem;
+    border-radius: 1.1rem;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    max-width: 420px;
+    width: 100%;
+    border: 1px solid #e5e7eb;
+}
+
+.app-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+}
+
+/* ========== USER PILL (TOP RIGHT) ========== */
+
+.user-pill {
+    text-align: right;
+    background: #e5e7eb;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    color: #111827;
+    border: 1px solid #d1d5db;
+}
+
+/* ========== SIDEBAR (LIGHT) ========== */
+
+[data-testid="stSidebar"] {
+    background-color: #ffffff;
+    border-right: 1px solid #e5e7eb;
+}
+
+[data-testid="stSidebar"] * {
+    color: #111827 !important;
+}
+
+.sidebar-footer {
+    margin-top: 2rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+/* ========== CARDS (UPLOAD / POLICY LIBRARY / GENERIC) ========== */
+
+.stContainer,
+div[data-testid="stFileUploader"],
+div[role="group"][data-baseweb="card"] {
+    border-radius: 0.8rem !important;
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* Titles and meta text for policy cards */
+.policy-card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-top: 0.75rem;
+    color: #111827;
+}
+
+.policy-meta {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+}
+
+/* ========== CHAT AREA ========== */
+
+/* Chat messages aligned with clean bubbles */
+.stChatMessage {
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.9rem;
+    margin-bottom: 0.35rem;
+}
+
+/* User bubble (right-aligned by Streamlit) */
+.stChatMessage.stChatMessage-user {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+/* Assistant bubble */
+.stChatMessage.stChatMessage-assistant {
+    background: #f9fafb;
+    color: #111827;
+    border: 1px solid #e5e7eb;
+}
+
+/* Markdown spacing inside chat */
+.stChatMessage .stMarkdown p {
+    margin-bottom: 0.3rem;
+    line-height: 1.5;
+}
+
+/* Code blocks in chat */
+.stChatMessage pre {
+    background: #11182710 !important;
+    border-radius: 0.5rem;
+}
+
+/* ========== INPUTS ========== */
+
+textarea,
+input[type="text"],
+input[type="password"],
+input[type="search"] {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    border-radius: 0.6rem !important;
+    border: 1px solid #d1d5db !important;
+}
+
+textarea::placeholder,
+input::placeholder {
+    color: #9ca3af !important;
+}
+
+/* Chat input bottom bar */
+[data-testid="stChatInput"] textarea {
+    background-color: #ffffff !important;
+}
+
+/* ========== BUTTONS ========== */
+
+.stButton > button,
+button[kind="primary"] {
+    border-radius: 999px !important;
+    font-weight: 500 !important;
+    padding: 0.45rem 1.25rem !important;
+}
+
+/* Default button */
+.stButton > button {
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    color: #111827;
+}
+
+/* Primary button (Upload, Login, etc.) */
+button[kind="primary"] {
+    background: #2563eb !important;
+    border: 1px solid #1d4ed8 !important;
+    color: #ffffff !important;
+}
+
+/* Hover */
+.stButton > button:hover,
+button[kind="primary"]:hover {
+    filter: brightness(1.03);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+}
+
+/* ========== SMALL ALIGNMENT TWEAKS ========== */
+
+/* Reduce extra top padding from tabs section */
+[data-testid="stTabs"] {
+    margin-top: 0.75rem;
+}
+
+/* Ensure upload area and button line up nicely */
+[data-testid="stFileUploader"] {
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+}

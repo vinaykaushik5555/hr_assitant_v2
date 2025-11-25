@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Tuple
 import re
+import logging
 
 
 # ---------------------------------------------------------------------
@@ -10,22 +11,38 @@ import re
 # ---------------------------------------------------------------------
 
 TOXIC_WORDS = [
-    "fuck", "shit", "bitch", "asshole", "bastard",
-    "dick", "cunt", "moron", "retard",
+    r"fuck",
+    r"shit",
+    r"bitch",
+    r"asshole",
+    r"bastard",
+    r"dick",
+    r"cunt",
+    r"moron",
+    r"retard",
 ]
 
 RACIST_SLURS = [
-    "nigger", "nigga", "chink", "spic", "paki",
-    "kike", "faggot", "tranny",
+    r"nigger",
+    r"nigga",
+    r"chink",
+    r"spic",
+    r"paki",
+    r"kike",
+    r"faggot",
+    r"tranny",
 ]
 
 PROMPT_INJECTION = [
-    "ignore all previous instructions",
-    "disregard previous instructions",
-    "jailbreak",
-    "system override",
-    "act as an unrestricted ai",
+    r"ignore all previous instructions",
+    r"disregard previous instructions",
+    r"jailbreak",
+    r"system override",
+    r"act as an unrestricted ai",
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 def _find_banned_words(text: str) -> list[str]:
@@ -81,16 +98,19 @@ def validate_input(message: str) -> Tuple[bool, str | None]:
     text = message.strip()
 
     if not text:
+        logger.info("Input rejected: empty message.")
         return False, "Please type something to continue."
 
     # Limit length (basic DOS guard)
     if len(text) > 2000:
+        logger.warning("Input rejected: length %d exceeds limit.", len(text))
         return False, "Your message is too long. Please shorten and try again."
 
     lower = text.lower()
 
     # Simple prompt injection block
     if any(p in lower for p in PROMPT_INJECTION):
+        logger.warning("Prompt injection attempt detected: %s", text)
         return (
             False,
             "Your message violates company communication policy: "
@@ -113,9 +133,11 @@ def validate_input(message: str) -> Tuple[bool, str | None]:
             f"> {highlighted}"
         )
 
+        logger.warning("Blocked toxic message containing: %s", banned_display)
         return False, response
 
     # If we reach here, input is allowed
+    logger.debug("Input accepted by guardrails.")
     return True, text
 
 
@@ -136,6 +158,7 @@ def validate_output(answer: str) -> str:
 
     # Remove disclaimers like "As an AI language model..."
     if "as an ai" in lower or "as a language model" in lower:
+        logger.info("Stripped disclaimer from output.")
         cleaned_lines = [
             ln
             for ln in text.splitlines()
@@ -154,4 +177,5 @@ def validate_output(answer: str) -> str:
             flags=re.IGNORECASE,
         )
 
+    logger.debug("Output sanitized by guardrails.")
     return text
