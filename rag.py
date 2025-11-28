@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
+import logging
+
 from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader,
@@ -18,8 +20,24 @@ from chromadb.utils import embedding_functions
 from config import POLICY_DIR, POLICY_INDEX_DIR
 
 
+logger = logging.getLogger(__name__)
+
 # Name of the Chroma collection used for HR policies
 COLLECTION_NAME = "hr_policies"
+
+
+def _policy_index_has_data() -> bool:
+    """Return True if the Chroma persist directory already has any files."""
+    if not POLICY_INDEX_DIR.exists():
+        return False
+    return any(POLICY_INDEX_DIR.iterdir())
+
+
+def _policy_dir_has_files() -> bool:
+    """Return True if there are any file entries under POLICY_DIR."""
+    if not POLICY_DIR.exists():
+        return False
+    return any(path.is_file() for path in POLICY_DIR.rglob("*"))
 
 
 def _chroma_settings() -> Settings:
@@ -118,6 +136,11 @@ def get_vector_store() -> Chroma:
 
     Used at query time by the chat assistant.
     """
+    if not _policy_index_has_data():
+        if _policy_dir_has_files():
+            logger.info("Policy index not found; triggering auto rebuild before query.")
+            return build_or_rebuild_vector_store()
+        logger.warning("Policy index missing and no policy documents found.")
     embeddings = _get_embeddings()
     return Chroma(
         embedding_function=embeddings,

@@ -19,6 +19,9 @@ from mcp_client import (
     mcp_admin_list_employees,
     mcp_admin_create_employee,
 )
+from timesheet_operations import acknowledge_timesheet_request
+from transport_operations import acknowledge_transport_request
+from training_operations import acknowledge_training_status
 
 
 logger = logging.getLogger(__name__)
@@ -60,6 +63,42 @@ def _get_last_user_message(state: AgentState) -> str:
     return ""
 
 
+def _keyword_intent_override(message: str) -> str | None:
+    """
+    Lightweight keyword routing so helper prompts map to the correct intent
+    even before hitting the classifier LLM.
+    """
+    text = message.lower().strip()
+    if not text:
+        return None
+
+    def contains_all(*words: str) -> bool:
+        return all(word in text for word in words)
+
+    if "timesheet" in text or contains_all("worked", "hours"):
+        return "timesheet_entry"
+    if "cab" in text or "pickup" in text or "transport" in text:
+        return "transport_booking"
+    if "training" in text and ("pending" in text or "overdue" in text or "status" in text):
+        return "training_status"
+    if "leave balance" in text:
+        return "leave_balance"
+    if contains_all("leave", "recent") or "leave requests" in text:
+        return "leave_status"
+    if "apply" in text and "leave" in text:
+        return "leave_apply"
+    if "policy" in text:
+        return "policy_query"
+    if "profile" in text:
+        return "profile_info"
+    if contains_all("create", "employee"):
+        return "admin_create_employee"
+    if "employee directory" in text or "list employees" in text:
+        return "admin_list_employees"
+
+    return None
+
+
 # ---------------------------------------------------------------------
 # Node: intent classification
 # ---------------------------------------------------------------------
@@ -77,11 +116,20 @@ def classify_intent(state: AgentState) -> AgentState:
       - 'profile_info'        -> wants to know details about themselves / their role
       - 'admin_list_employees'-> HR admin wants roster/directory data
       - 'admin_create_employee'-> HR admin wants to onboard/create an employee
+      - 'timesheet_entry'      -> capture/fill working hours or project codes
+      - 'transport_booking'    -> arrange pickup/drop transport
+      - 'training_status'      -> show mandatory/pending/overdue trainings
       - 'other'               -> anything else / small talk
     """
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
     last_user = _get_last_user_message(state)
+
+    override_intent = _keyword_intent_override(last_user)
+    if override_intent:
+        state["intent"] = override_intent
+        logger.info("Keyword override classified intent as '%s' for message '%s'", override_intent, last_user)
+        return state
+
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
     system_prompt = (
         "You are an intent classifier for an HR assistant.\n"
@@ -93,6 +141,9 @@ def classify_intent(state: AgentState) -> AgentState:
         "  - profile_info\n"
         "  - admin_list_employees\n"
         "  - admin_create_employee\n"
+        "  - timesheet_entry\n"
+        "  - transport_booking\n"
+        "  - training_status\n"
         "  - other\n\n"
         "If the user is clearly talking about applying for leave, dates, "
         "or asking to submit leave, choose 'leave_apply'.\n"
@@ -100,7 +151,11 @@ def classify_intent(state: AgentState) -> AgentState:
         "choose 'profile_info'.\n"
         "If the user wants to list or review employees, choose 'admin_list_employees'.\n"
         "If the user wants to onboard or create an employee account, choose "
-        "'admin_create_employee'.\n\n"
+        "'admin_create_employee'.\n"
+        "If the user is describing time logging, hours worked, or project codes, "
+        "choose 'timesheet_entry'.\n"
+        "If the user is asking for a cab/transport pickup or drop, choose 'transport_booking'.\n"
+        "If the user wants to know pending or overdue trainings, choose 'training_status'.\n\n"
         "Return ONLY the intent label, nothing else."
     )
 
@@ -120,6 +175,9 @@ def classify_intent(state: AgentState) -> AgentState:
         "profile_info",
         "admin_list_employees",
         "admin_create_employee",
+        "timesheet_entry",
+        "transport_booking",
+        "training_status",
         "other",
     }:
         intent = "other"
@@ -678,6 +736,44 @@ def handle_admin_create_employee(state: AgentState) -> AgentState:
 
 
 # ---------------------------------------------------------------------
+# Node: HR operations placeholders (timesheet, transport, training)
+# ---------------------------------------------------------------------
+
+
+def handle_timesheet_entry(state: AgentState) -> AgentState:
+    """
+    Dummy node that records a timesheet request and returns a positive response.
+    """
+    user_message = _get_last_user_message(state)
+    result = acknowledge_timesheet_request(user_message)
+    logger.info("Timesheet placeholder handled with metadata=%s", result.metadata)
+    state["messages"].append({"role": "assistant", "content": result.message})
+    return state
+
+
+def handle_transport_booking(state: AgentState) -> AgentState:
+    """
+    Dummy node for transport/cab bookings.
+    """
+    user_message = _get_last_user_message(state)
+    result = acknowledge_transport_request(user_message)
+    logger.info("Transport placeholder handled with metadata=%s", result.metadata)
+    state["messages"].append({"role": "assistant", "content": result.message})
+    return state
+
+
+def handle_training_status(state: AgentState) -> AgentState:
+    """
+    Dummy node that reports pending/overdue trainings.
+    """
+    user_message = _get_last_user_message(state)
+    result = acknowledge_training_status(user_message)
+    logger.info("Training placeholder handled with metadata=%s", result.metadata)
+    state["messages"].append({"role": "assistant", "content": result.message})
+    return state
+
+
+# ---------------------------------------------------------------------
 # Node: fallback for 'other' intent
 # ---------------------------------------------------------------------
 
@@ -687,14 +783,16 @@ def handle_other(state: AgentState) -> AgentState:
     Fallback node for chit-chat or unsupported intents.
     """
     content = (
-        "I can help you with:\n"
+        "Here’s what I can help with right now:\n"
         "- Questions about HR policies (leave, holidays, etc.)\n"
-        "- Checking your leave balance\n"
-        "- Viewing your recent leave applications\n"
+        "- Checking your leave balance or recent leave requests\n"
         "- Applying for leave conversationally\n"
+        "- Logging your timesheet details (placeholder flow)\n"
+        "- Booking or updating a cab pickup/drop (placeholder flow)\n"
+        "- Checking pending or overdue trainings (placeholder flow)\n"
         "- Showing your profile details\n"
         "- HR admin tasks like viewing or onboarding employees\n\n"
-        "Please ask a policy-related question or something about your leave."
+        "Let me know which of these you’d like to do."
     )
     state["messages"].append({"role": "assistant", "content": content})
     return state
@@ -713,6 +811,9 @@ def route_after_classify(state: AgentState) -> Literal[
     "handle_profile_info",
     "handle_admin_list_employees",
     "handle_admin_create_employee",
+    "handle_timesheet_entry",
+    "handle_transport_booking",
+    "handle_training_status",
     "handle_other",
 ]:
     """
@@ -733,6 +834,12 @@ def route_after_classify(state: AgentState) -> Literal[
         return "handle_admin_list_employees"
     if intent == "admin_create_employee":
         return "handle_admin_create_employee"
+    if intent == "timesheet_entry":
+        return "handle_timesheet_entry"
+    if intent == "transport_booking":
+        return "handle_transport_booking"
+    if intent == "training_status":
+        return "handle_training_status"
     return "handle_other"
 
 
@@ -750,6 +857,9 @@ graph.add_node("handle_leave_apply", handle_leave_apply)
 graph.add_node("handle_profile_info", handle_profile_info)
 graph.add_node("handle_admin_list_employees", handle_admin_list_employees)
 graph.add_node("handle_admin_create_employee", handle_admin_create_employee)
+graph.add_node("handle_timesheet_entry", handle_timesheet_entry)
+graph.add_node("handle_transport_booking", handle_transport_booking)
+graph.add_node("handle_training_status", handle_training_status)
 graph.add_node("handle_other", handle_other)
 
 # Entry point: classify intent first
@@ -767,6 +877,9 @@ for node_name in [
     "handle_profile_info",
     "handle_admin_list_employees",
     "handle_admin_create_employee",
+    "handle_timesheet_entry",
+    "handle_transport_booking",
+    "handle_training_status",
     "handle_other",
 ]:
     graph.add_edge(node_name, END)

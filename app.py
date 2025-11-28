@@ -4,8 +4,10 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import streamlit as st
+import yaml
 from langsmith import traceable
 
 from mcp_client import (
@@ -22,6 +24,9 @@ from guardrails_local import validate_input, validate_output
 from logging_setup import configure_logging
 
 
+HELPER_PROMPTS_PATH = Path("helper_prompts.yaml")
+
+
 configure_logging()
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,75 @@ def load_custom_css() -> None:
     if css_path.exists():
         css = css_path.read_text(encoding="utf-8")
         st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+def _load_helper_prompts() -> list[dict[str, Any]]:
+    """
+    Load helper prompts from helper_prompts.yaml into a structured list.
+    """
+    if not HELPER_PROMPTS_PATH.exists():
+        logger.warning("Helper prompts file %s not found.", HELPER_PROMPTS_PATH)
+        return []
+
+    try:
+        payload = yaml.safe_load(HELPER_PROMPTS_PATH.read_text(encoding="utf-8")) or {}
+    except Exception as exc:  # pragma: no cover - file formatting issues
+        logger.error("Failed to parse helper prompts: %s", exc)
+        return []
+
+    categories = payload.get("categories")
+    if not isinstance(categories, list):
+        logger.warning("Helper prompts missing 'categories' list.")
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for cat in categories:
+        if not isinstance(cat, dict):
+            continue
+        prompts_raw = cat.get("prompts") or []
+        prompts: list[dict[str, Any]] = []
+        for prompt in prompts_raw:
+            if isinstance(prompt, dict) and prompt.get("text"):
+                prompts.append(prompt)
+
+        normalized.append(
+            {
+                "label": cat.get("label") or cat.get("id") or "Prompts",
+                "description": cat.get("description") or "",
+                "prompts": prompts,
+            }
+        )
+    return normalized
+
+
+def render_helper_prompts_section() -> None:
+    """
+    Display helper prompts so users can copy/paste ready-made questions.
+    """
+    categories = _load_helper_prompts()
+    with st.container(border=True):
+        st.markdown("#### 💡 Quick Help & Prompts")
+        st.caption("Use these starter prompts. Click the copy icon and paste into the chat box.")
+
+        if not categories:
+            st.info("No helper prompts available. Add entries to helper_prompts.yaml to populate this list.")
+            return
+
+        for category in categories:
+            label = category.get("label", "Prompts")
+            description = category.get("description")
+            prompts = category.get("prompts") or []
+            with st.expander(label, expanded=False):
+                if description:
+                    st.caption(description)
+                if not prompts:
+                    st.info("No prompts available yet.")
+                    continue
+                for prompt in prompts:
+                    title = prompt.get("title", "Prompt")
+                    text = prompt.get("text", "")
+                    st.markdown(f"**{title}**")
+                    st.code(text, language="markdown")
 
 
 # =====================================================================
@@ -209,6 +283,8 @@ def main_page() -> None:
             st.write(f"**{st.session_state.user_name}**")
             st.caption(role_label)
 
+    st.divider()
+    render_helper_prompts_section()
     st.divider()
 
     # Sidebar

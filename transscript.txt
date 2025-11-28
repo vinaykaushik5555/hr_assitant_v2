@@ -1,0 +1,191 @@
+
+Vinay Kumar
+0 minutes 5 seconds0:05
+Vinay Kumar 0 minutes 5 seconds
+OK, so the recently I have completed that 201 training in which the agenda was to cover some Jan AI basics. So after the completion we have to implement our on use case which uses steam rate for UI Langda for agent.
+Vinay Kumar 0 minutes 23 seconds
+Agent and RAG use case and an MTP server and past API. So I have created a slide that I have implemented my use case as a HR assistant AI system.
+Vinay Kumar 0 minutes 39 seconds
+So what it has, So what what it tries to solve to it is a lot of fragmented information in multiple portals for employees and HR. Suppose you want to search the maternity policy. There is a different place and you want to apply for leaves. You have to go to the.
+Vinay Kumar 0 minutes 59 seconds
+Different portal and you want to apply for a transport TMS ticket. So you have to go to different portals and log into different portals and you have to follow the convention. So I have make it an agent which is HR AI assistant agent.
+Vinay Kumar 1 minute 16 seconds
+It is for both the target users are employees and and the HR admins. So what it can do it can it can search employees can search the policies on the portal itself. Employees can ask what is the casualty policy for for me.
+Vinay Kumar 1 minute 36 seconds
+And what is maternity policy? So the user can ask the queries similar to similar for the for the admins. They can update the policy so system supports multiple type of formats.
+Vinay Kumar 1 minute 53 seconds
+Which is a PDF MD file, HTML they can upload to portal and they can build the index vector index and users, employees or even HR can search on the based on the provided document. So that is part of that.
+Vinay Kumar 2 minutes 12 seconds
+Implementation. Apart from that I had built different tools which is which is exposed as a MCP server, MCP tool which allows like employee can apply for leaves by natural language, let's say user say.
+Vinay Kumar 2 minutes 31 seconds
+I won't leave from this date to this date and the reason is I am I am I am not well so that agent would determine that intent of the user like they it wants to apply for the leave and it would convert into the.
+Vignesh S 51 minutes 2 seconds
+All right, I'll pass on the feedback to Nitish, OK.
+
+Vinay Kumar
+51 minutes 6 seconds51:06
+Vinay Kumar 51 minutes 6 seconds
+So at the final I want to understand what improvement upon you say MCP client implementation is incorrect. That should not be that that should not be in this way another.
+
+Vignesh S
+51 minutes 18 seconds51:18
+Vignesh S 51 minutes 18 seconds
+Um.
+Vignesh S 51 minutes 20 seconds
+Yes, and.
+Vignesh S 51 minutes 23 seconds
+The land graph land graph minimum. It should be having the the nodes of 3-4 that should intelligently decide OK which needs to be called and it has to do some actions.
+
+Vinay Kumar
+51 minutes 24 seconds51:24
+Vinay Kumar 51 minutes 24 seconds
+And what? OK, language, OK.
+
+Vignesh S
+51 minutes 39 seconds51:39
+Vignesh S 51 minutes 39 seconds
+OK, never ever and never ever MCP MCP tools should not have any interaction with an alarm.
+
+Vinay Kumar
+51 minutes 39 seconds51:39
+Vinay Kumar 51 minutes 39 seconds
+Got it. So I'll note it down.
+
+Vignesh S
+51 minutes 50 seconds51:50
+Vignesh S 51 minutes 50 seconds
+That should purely based on some system record extraction or some of the API calls. That's it. That should not have any link to LLM.
+
+Vinay Kumar
+51 minutes 51 seconds51:51
+Vinay Kumar 51 minutes 51 seconds
+OK.
+Vinay Kumar 52 minutes 1 second
+OK, got it.
+
+Vignesh S
+52 minutes 5 seconds52:05
+Vignesh S 52 minutes 5 seconds
+All right, and you should come up with a React framework enabled approach.
+
+Vinay Kumar
+52 minutes 5 seconds52:05
+Vinay Kumar 52 minutes 5 seconds
+So.
+Vinay Kumar 52 minutes 11 seconds
+So this is.
+Vinay Kumar 52 minutes 13 seconds
+What do you mean by the act enabled approach?
+
+Vignesh S
+52 minutes 18 seconds52:18
+Vignesh S 52 minutes 18 seconds
+I think you should better study that it's our reasoning and actually.
+
+Vinay Kumar
+52 minutes 25 seconds52:25
+Vinay Kumar 52 minutes 25 seconds
+OK, so things are actually the problem is that in the tools this is the January to 01 that most of the topics are mostly covered as a hello world application and some basics. So it would take time to read all about these things since I'm also working on.
+Vinay Kumar 52 minutes 43 seconds
+Uh, client project. So yeah.
+
+Vignesh S
+52 minutes 44 seconds52:44
+Vignesh S 52 minutes 44 seconds
+Yeah, understood, Vinay. So yeah, things will takes time, but this is sorry, one second.
+Vignesh S 52 minutes 54 seconds
+Yeah, so things will take time. So this will be a iterative process. Maybe work on the feedback, then we'll further check OK, how it has been progressed, OK.
+
+Vinay Kumar
+52 minutes 57 seconds52:57
+Vinay Kumar 52 minutes 57 seconds
+Yeah.
+Vinay Kumar 53 minutes 1 second
+Yeah, yeah, sure.
+
+Vignesh S
+53 minutes 8 seconds53:08
+Vignesh S 53 minutes 8 seconds
+I'll pass the feedback to Nitesh.
+
+Vinay Kumar
+53 minutes 9 seconds53:09
+Vinay Kumar 53 minutes 9 seconds
+OK.
+Vinay Kumar 53 minutes 11 seconds
+OK, so what finalize I would be say I would be need to work on MCP client, a client and the React framework you have mentioned.
+
+Vignesh S
+53 minutes 21 seconds53:21
+Vignesh S 53 minutes 21 seconds
+Uh, Langraf.
+
+Vinay Kumar
+53 minutes 23 seconds53:23
+Vinay Kumar 53 minutes 23 seconds
+And then, yeah.
+
+Vignesh S
+53 minutes 26 seconds53:26
+Vignesh S 53 minutes 26 seconds
+And.
+Vignesh S 53 minutes 31 seconds
+And memory somewhere you have to add memory.
+Vignesh S 53 minutes 37 seconds
+Short term, long term memory.
+Vignesh S 53 minutes 40 seconds
+I haven't asked anything about the rack. I'll come to the rack bit details. Make sure that you have conceptual understanding for almost all the topics mentioned in this page, OK?
+
+Vinay Kumar
+53 minutes 41 seconds53:41
+Vinay Kumar 53 minutes 41 seconds
+OK.
+Vinay Kumar 53 minutes 53 seconds
+OK.
+
+Vignesh S
+53 minutes 54 seconds53:54
+Vignesh S 53 minutes 54 seconds
+Right now we are trying to discuss about your application. So once we've done it, we'll go and ask for the deep down of.
+
+Vinay Kumar
+53 minutes 57 seconds53:57
+Vinay Kumar 53 minutes 57 seconds
+Mm.
+
+Vignesh S
+54 minutes 3 seconds54:03
+Vignesh S 54 minutes 3 seconds
+Of your knowledge.
+
+Vinay Kumar
+54 minutes 6 seconds54:06
+Vinay Kumar 54 minutes 6 seconds
+OK.
+
+Vignesh S
+54 minutes 7 seconds54:07
+Vignesh S 54 minutes 7 seconds
+All right. OK, Vinay, I have another call, so.
+
+Vinay Kumar
+54 minutes 12 seconds54:12
+Vinay Kumar 54 minutes 12 seconds
+It.
+
+Vignesh S
+54 minutes 13 seconds54:13
+Vignesh S 54 minutes 13 seconds
+Discuss sometime.
+
+Vinay Kumar
+54 minutes 15 seconds54:15
+Vinay Kumar 54 minutes 15 seconds
+OK. OK. Thank you. Bye.
+
+Vignesh S
+54 minutes 16 seconds54:16
+Vignesh S 54 minutes 16 seconds
+Bye, bye.
+
+Vignesh S stopped transcription

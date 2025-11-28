@@ -1,0 +1,50 @@
+categories:
+  - id: policy_support
+    label: "Policy & FAQ"
+    description: >
+      Quick prompts for retrieving HR policy guidance via the RAG knowledge base.
+    prompts:
+      - title: "Maternity Leave Overview"
+        text: "What is the current maternity leave policy and how long can I take off?"
+      - title: "Casual Leave Rules"
+        text: "Summarize the rules for taking casual leave, including limits per quarter."
+      - title: "Holiday Calendar"
+        text: "List the upcoming company holidays for this quarter."
+  - id: leave_actions
+    label: "Leave & Balance"
+    description: >
+      Use these to check balances, view history, or apply for time off.
+    prompts:
+      - title: "Check Leave Balance"
+        text: "Show my current leave balance for all leave types."
+      - title: "Recent Leave Applications"
+        text: "What are my last five leave requests and their status?"
+      - title: "Apply for Leave"
+        text: >
+          Apply for casual leave from 2025-02-10 to 2025-02-12 for a family event.
+  - id: workforce_ops
+    label: "Timesheet, Transport, Training"
+    description: >
+      Placeholder workflows that confirm your operational requests until live integrations are added.
+    prompts:
+      - title: "Log Timesheet"
+        text: >
+          I worked 8 hours each day from Monday to Friday on project FIN-204 this week.
+      - title: "Book Cab"
+        text: >
+          Book my cab pickup for tomorrow at 10:30 AM and drop today at 7 PM.
+      - title: "Training Status"
+        text: "What are my pending trainings, and which ones are overdue?"
+  - id: profile_admin
+    label: "Profile & Admin"
+    description: >
+      Prompts for self-profile lookups or HR administrative actions.
+    prompts:
+      - title: "Show My Profile"
+        text: "What is my employee ID, department, and role?"
+      - title: "List Employees"
+        text: "Show the current HR employee directory."
+      - title: "Create Employee"
+        text: >
+          Create a new employee: ID EMP-452, username jdoe, temporary password Temp#452,
+          name Jane Doe, email jane.doe@example.com, department Finance.
